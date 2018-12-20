@@ -1,0 +1,662 @@
+﻿<Application x:Class="SidebarDiagnostics.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tb="http://www.hardcodet.net/taskbar"
+             xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+             xmlns:local="clr-namespace:SidebarDiagnostics"
+             xmlns:frame="clr-namespace:SidebarDiagnostics.Framework"
+             xmlns:command="clr-namespace:SidebarDiagnostics.Commands"
+             xmlns:conv="clr-namespace:SidebarDiagnostics.Converters"
+             xmlns:win="clr-namespace:SidebarDiagnostics.Windows"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="FlatStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <command:ActivateCommand x:Key="ShowCommand" />
+
+            <tb:TaskbarIcon x:Key="TrayIcon" IconSource="Sidebar.ico" LeftClickCommand="{StaticResource ShowCommand}">
+                <tb:TaskbarIcon.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="{x:Static frame:Resources.ButtonSettings}" Click="Settings_Click" />
+                        <MenuItem Header="{x:Static frame:Resources.ButtonReload}" Click="Reload_Click" />
+                        <MenuItem Header="{x:Static frame:Resources.ButtonGraph}" Click="Graph_Click" />
+                        <Separator />
+                        <MenuItem Header="{x:Static frame:Resources.ButtonVisibility}" SubmenuOpened="Visibility_SubmenuOpened">
+                            <MenuItem Header="{x:Static frame:Resources.ButtonShow}" Click="Show_Click" />
+                            <MenuItem Header="{x:Static frame:Resources.ButtonHide}" Click="Hide_Click" />
+                        </MenuItem>
+                        <Separator />
+                       <!-- <MenuItem Header="{x:Static frame:Resources.ButtonDonate}" Click="Donate_Click" />
+                        <MenuItem Header="{x:Static frame:Resources.ButtonGitHub}" Click="GitHub_Click" />
+                        <MenuItem Header="{x:Static frame:Resources.ButtonUpdate}" Click="Update_Click" /> 
+                       -->
+
+                        <MenuItem Header="{x:Static frame:Resources.AdhocButton}" Click="Adhoc_Click" />
+                        <MenuItem Header="{x:Static frame:Resources.AboutButton}" Click="About_Click" />
+                        <MenuItem Header="{x:Static frame:Resources.ButtonClose}" Click="Close_Click" />
+                    </ContextMenu>
+                </tb:TaskbarIcon.ContextMenu>
+            </tb:TaskbarIcon>
+
+            <conv:MetricLabelConverter x:Key="MetricLabelConverter" />
+            <conv:FontToSpaceConverter x:Key="FontToSpaceConverter" />
+            <conv:BoolInverseConverter x:Key="BoolInverseConverter" />
+            <conv:PercentConverter x:Key="PercentConverter" />
+
+            <Style x:Key="SidebarWindow" TargetType="{x:Type win:AppBarWindow}">
+                <Setter Property="Title" Value="{x:Static frame:Resources.Sidebar}" />
+                <Setter Property="Icon" Value="Sidebar.ico" />
+                <Setter Property="Width" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=SidebarWidth, Mode=OneWay}" />
+                <Setter Property="Height" Value="800" />
+                <Setter Property="AutoDPI" Value="False" />
+                <Setter Property="ShowInTaskbar" Value="False" />
+                <Setter Property="AllowsTransparency" Value="True" />
+                <Setter Property="ResizeMode" Value="NoResize" />
+                <Setter Property="ShowActivated" Value="False" />
+                <Setter Property="ShowTitleBar" Value="False" />
+                <Setter Property="ShowIcon" Value="False" />
+                <Setter Property="ShowTitle" Value="False" />
+                <Setter Property="ShowMinimize" Value="False" />
+                <Setter Property="ShowMaximize" Value="False" />
+                <Setter Property="ShowClose" Value="False" />
+                <Setter Property="WindowStyle" Value="None" />
+                <Setter Property="Background">
+                    <Setter.Value>
+                        <SolidColorBrush Opacity="{Binding Source={x:Static frame:Settings.Instance}, Path=BGOpacity, Mode=OneWay}" Color="{Binding Source={x:Static frame:Settings.Instance}, Path=BGColor, Mode=OneWay}" />
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Source={x:Static frame:Settings.Instance}, Path=AutoBGColor, Mode=OneWay}" Value="True">
+                        <Setter Property="Background">
+                            <Setter.Value>
+                                <SolidColorBrush Opacity="{Binding Source={x:Static frame:Settings.Instance}, Path=BGOpacity, Mode=OneWay}" Color="{Binding Path=(SystemParameters.WindowGlassColor), Mode=OneWay}" />
+                            </Setter.Value>
+                        </Setter>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="MainPanel" TargetType="{x:Type DockPanel}">
+                <Setter Property="LastChildFill" Value="True" />
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Path=Ready, Mode=OneWay}" Value="True">
+                        <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="MenuBar" TargetType="{x:Type StackPanel}">
+                <Setter Property="Margin" Value="10" />
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="Visibility" Value="Hidden" />
+                <Setter Property="DockPanel.Dock" Value="Top" />
+            </Style>
+
+            <Style x:Key="IconButton" TargetType="{x:Type Button}">
+                <Setter Property="Foreground" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontColor, Mode=OneWay}" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Button}">
+                            <Border Background="{TemplateBinding Background}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Opacity" Value="0.8" />
+                                    <Setter Property="Cursor" Value="Hand" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Resources>
+                    <Style TargetType="{x:Type Path}">
+                        <Setter Property="Fill" Value="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" />
+                        <Setter Property="Stretch" Value="Uniform" />
+                    </Style>
+                </Style.Resources>
+            </Style>
+
+            <Style x:Key="MenuButton" TargetType="{x:Type Button}" BasedOn="{StaticResource IconButton}">
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Width" Value="14" />
+                <Setter Property="Height" Value="14" />
+                <Setter Property="Margin" Value="10,0,0,0" />
+            </Style>
+
+            <Style x:Key="AppIcon" TargetType="{x:Type Path}">
+                <Setter Property="Width" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.IconSize, Mode=OneWay}" />
+                <Setter Property="Height" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.IconSize, Mode=OneWay}" />
+                <Setter Property="Margin" Value="0,0,10,0" />
+                <Setter Property="Stretch" Value="Uniform" />
+                <Setter Property="Fill" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontColor, Mode=OneWay}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="AppTitle" TargetType="{x:Type Label}">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Foreground" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontColor, Mode=OneWay}" />
+                <Setter Property="FontSize" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.TitleFontSize, Mode=OneWay}" />
+            </Style>
+
+            <Style x:Key="AppText" TargetType="{x:Type TextBlock}">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Foreground" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontColor, Mode=OneWay}" />
+                <Setter Property="FontSize" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.SmallFontSize, Mode=OneWay}" />
+                <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+            </Style>
+
+            <Style x:Key="ContentPanel" TargetType="{x:Type StackPanel}">
+                <Setter Property="Margin" Value="15,0" />
+                <Setter Property="Orientation" Value="Vertical" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+            </Style>
+
+            <Style x:Key="VerticalPanel" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Vertical" />
+            </Style>
+
+            <Style x:Key="GroupPanel" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Vertical" />
+                <Setter Property="Margin" Value="0,10" />
+            </Style>
+
+            <Style x:Key="MonitorPanel" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Vertical" />
+                <Setter Property="Margin" Value="0,10,0,0" />
+            </Style>
+
+            <Style x:Key="MonitorTitle" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Horizontal" />
+            </Style>
+
+            <Style x:Key="HardwarePanel" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Vertical" />
+                <Setter Property="Margin" Value="0,10,0,0" />
+            </Style>
+
+            <Style x:Key="DataText" TargetType="{x:Type TextBlock}">
+                <Setter Property="Foreground" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontColor, Mode=OneWay}" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="FontSize" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.FontSize, Mode=OneWay}" />
+                <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+            </Style>
+
+            <Style x:Key="HardwareText" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource DataText}">
+                <Setter Property="Margin" Value="0,0,0,6" />
+            </Style>
+
+            <Style x:Key="MetricPanel" TargetType="{x:Type DockPanel}">
+                <Setter Property="LastChildFill" Value="False" />
+            </Style>
+            
+            <Style x:Key="MetricLabel" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource DataText}">
+                <Setter Property="DockPanel.Dock" Value="Left" />
+                <Setter Property="Margin" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.FontSize, Mode=OneWay, Converter={StaticResource FontToSpaceConverter}}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Path=IsAlert, Mode=OneWay}" Value="True">
+                        <Setter Property="Foreground" Value="{Binding Path=AlertColor, Mode=OneWay}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="MetricValue" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource MetricLabel}">
+                <Setter Property="Margin" Value="0" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Source={x:Static frame:Settings.Instance}, Path=TextAlign, Mode=OneWay}" Value="Right">
+                        <Setter Property="DockPanel.Dock" Value="Right" />
+                        <Setter Property="TextAlignment" Value="Right" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            
+            <Style x:Key="DriveProgress" TargetType="{x:Type ProgressBar}">
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="100" />
+                <Setter Property="Margin" Value="0,4" />
+                <Setter Property="Width" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.BarWidthWide, Mode=OneWay}" />
+                <Setter Property="Height" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontSetting.BarHeight, Mode=OneWay}" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="Foreground" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontColor, Mode=OneWay}" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ProgressBar}">
+                            <Border Name="PART_Track" CornerRadius="2" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding Foreground}" BorderThickness="1">
+                                <Border Name="PART_Indicator" CornerRadius="2,0,0,2" Background="{TemplateBinding Foreground}" BorderBrush="{TemplateBinding Background}" BorderThickness="1" HorizontalAlignment="Left" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Path=IsAlert, Mode=OneWay}" Value="True">
+                                    <Setter Property="Foreground" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=AlertFontColor, Mode=OneWay}" />
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Source={x:Static frame:Settings.Instance}, Path=TextAlign, Mode=OneWay}" Value="Right">
+                        <Setter Property="Width" Value="Auto" />
+                        <Setter Property="HorizontalAlignment" Value="Stretch" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="SettingTab" TargetType="{x:Type TabControl}">
+                <Setter Property="Margin" Value="15,15,15,0" />
+                <Setter Property="Padding" Value="15" />
+            </Style>
+
+            <Style x:Key="SettingGrid" TargetType="{x:Type Grid}">
+                <Style.Resources>
+                    <Style TargetType="{x:Type FrameworkElement}">
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                    </Style>
+                    <Style TargetType="{x:Type Label}" BasedOn="{StaticResource {x:Type FrameworkElement}}">
+                        <Setter Property="Margin" Value="0,5,15,0" />
+                        <Setter Property="MinWidth" Value="60" />
+                    </Style>
+                    <Style TargetType="{x:Type ComboBox}" BasedOn="{StaticResource {x:Type FrameworkElement}}" />
+                    <Style TargetType="{x:Type xctk:CheckComboBox}" BasedOn="{StaticResource {x:Type FrameworkElement}}" />
+                    <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource {x:Type FrameworkElement}}" />
+                    <Style TargetType="{x:Type CheckBox}" BasedOn="{StaticResource {x:Type FrameworkElement}}">
+                        <Setter Property="Margin" Value="0,6,0,0" />
+                    </Style>
+                    <Style TargetType="{x:Type DockPanel}" BasedOn="{StaticResource {x:Type FrameworkElement}}">
+                        <Style.Resources>
+                            <Style TargetType="{x:Type TextBox}">
+                                <Setter Property="DockPanel.Dock" Value="Right" />
+                                <Setter Property="Width" Value="50" />
+                                <Setter Property="Margin" Value="5,0,0,0" />
+                            </Style>
+                            <Style TargetType="{x:Type Slider}">
+                                <Setter Property="DockPanel.Dock" Value="Left" />
+                                <Setter Property="TickPlacement" Value="None" />
+                                <Setter Property="IsSnapToTickEnabled" Value="True" />
+                            </Style>
+                        </Style.Resources>
+                    </Style>
+                    <Style TargetType="{x:Type xctk:ColorPicker}">
+                        <Setter Property="Margin" Value="0,6" />
+                        <Setter Property="UsingAlphaChannel" Value="False" />
+                        <Setter Property="ColorMode" Value="ColorCanvas" />
+                        <Setter Property="DisplayColorAndName" Value="True" />
+                        <Setter Property="ShowStandardColors" Value="False" />
+                        <Setter Property="AdvancedButtonHeader" Value="Advanced" />
+                        <Setter Property="AvailableColorsHeader" Value="Colors" />
+                        <Setter Property="StandardButtonHeader" Value="Standard" />
+                    </Style>
+                </Style.Resources>
+            </Style>
+
+            <Style x:Key="SettingButtons" TargetType="{x:Type StackPanel}">
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Bottom" />
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="Margin" Value="10,0,10,10" />
+                <Style.Resources>
+                    <Style TargetType="{x:Type Button}">
+                        <Setter Property="Margin" Value="10,0,0,0" />
+                        <Setter Property="Padding" Value="16,6" />
+                    </Style>
+                </Style.Resources>
+            </Style>
+
+            <Style x:Key="SettingTitle" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Vertical" />
+                <Setter Property="Margin" Value="0,0,0,10" />
+                <Style.Resources>
+                    <Style TargetType="{x:Type TextBlock}">
+                        <Setter Property="Margin" Value="0,0,0,4" />
+                    </Style>
+                </Style.Resources>
+            </Style>
+
+            <Style x:Key="MonitorGrid" TargetType="{x:Type DataGrid}">
+                <Setter Property="AutoGenerateColumns" Value="False" />
+                <Setter Property="HeadersVisibility" Value="Column" />
+                <Setter Property="SelectionUnit" Value="FullRow" />
+                <Setter Property="SelectionMode" Value="Single" />
+                <Setter Property="CanUserReorderColumns" Value="False" />
+                <Setter Property="CanUserResizeColumns" Value="False" />
+                <Setter Property="CanUserResizeRows" Value="False" />
+                <Setter Property="CanUserSortColumns" Value="False" />
+                <Setter Property="CanUserAddRows" Value="False" />
+                <Setter Property="CanUserDeleteRows" Value="False" />
+                <Setter Property="GridLinesVisibility" Value="None" />
+                <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+                <Style.Resources>
+                    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#E1E7E9" />
+                    <Style TargetType="{x:Type DataGridCell}">
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                </Style.Resources>
+            </Style>
+
+            <Style x:Key="HardwareGrid" TargetType="{x:Type ListView}">
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            </Style>
+
+            <Style x:Key="MonitorGridHeader" TargetType="{x:Type DataGridColumnHeader}">
+                <Setter Property="Padding" Value="12,4" />
+            </Style>
+
+            <Style x:Key="MonitorGridHeaderCenter" TargetType="{x:Type DataGridColumnHeader}" BasedOn="{StaticResource MonitorGridHeader}">
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="MonitorDetailsBorder" TargetType="{x:Type Border}">
+                <Setter Property="Background" Value="#ECF0F1" />
+                <Setter Property="Padding" Value="15,15,15,5" />
+            </Style>
+
+            <Style x:Key="MonitorHardwareItem" TargetType="{x:Type ListViewItem}">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderBrush" Value="Transparent" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="MonitorHardwareHeader" TargetType="{x:Type GridViewColumnHeader}">
+                <Setter Property="Padding" Value="12,4" />
+                <Setter Property="IsHitTestVisible" Value="False" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+            </Style>
+
+            <Style x:Key="MonitorHardwareHeaderCenter" TargetType="{x:Type GridViewColumnHeader}" BasedOn="{StaticResource MonitorHardwareHeader}">
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="MonitorHardwareCheckbox" TargetType="{x:Type CheckBox}">
+                <Setter Property="Margin" Value="0,2,0,0" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="MonitorHardwareText" TargetType="{x:Type TextBox}">
+                <Setter Property="Margin" Value="0,2,0,0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="MinWidth" Value="40" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="#000000" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+            </Style>
+
+            <Style x:Key="MonitorParams" TargetType="{x:Type ItemsControl}">
+                <Setter Property="Margin" Value="10" />
+            </Style>
+
+            <Style x:Key="HotkeyToggle" TargetType="{x:Type ToggleButton}">
+                <Setter Property="Content" Value="Bind" />
+                <Setter Property="Height" Value="22" />
+            </Style>
+
+            <Style x:Key="HotkeyLabel" TargetType="{x:Type TextBox}">
+                <Setter Property="Height" Value="22" />
+                <Setter Property="Padding" Value="5,0" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="IsReadOnly" Value="True" />
+            </Style>
+
+            <Style x:Key="DummyLabel" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Style.Resources>
+                    <Style TargetType="{x:Type Label}">
+                        <Setter Property="FontSize" Value="48" />
+                        <Setter Property="Foreground" Value="#FFFFFF" />
+                        <Setter Property="Margin" Value="6,0" />
+                        <Setter Property="Padding" Value="0" />
+                    </Style>
+                </Style.Resources>
+            </Style>
+
+            <Style x:Key="SetupPage" TargetType="{x:Type DockPanel}">
+                <Setter Property="IsEnabled" Value="False" />
+                <Setter Property="LastChildFill" Value="True" />
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="SetupProgress" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="0,10" />
+                <Style.Resources>
+                    <Style TargetType="{x:Type Ellipse}">
+                        <Setter Property="Width" Value="10" />
+                        <Setter Property="Height" Value="10" />
+                        <Setter Property="Margin" Value="2,0" />
+                        <Setter Property="Fill" Value="#9F9F9F" />
+                        <Style.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Fill" Value="#DDD" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Style.Resources>
+            </Style>
+
+            <Style x:Key="SetupTitle" TargetType="{x:Type Label}">
+                <Setter Property="Margin" Value="0,10,0,0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Foreground" Value="#333" />
+                <Setter Property="FontSize" Value="18" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="SetupSubtitle" TargetType="{x:Type TextBlock}">
+                <Setter Property="Margin" Value="0,10" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="MaxWidth" Value="220" />
+                <Setter Property="Foreground" Value="#111" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="TextAlignment" Value="Center" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="SetupText" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource SetupSubtitle}">
+                <Setter Property="Margin" Value="0,10" />
+            </Style>
+
+            <Style x:Key="SetupContent" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Vertical" />
+                <Setter Property="Margin" Value="0,10" />
+            </Style>
+
+            <Style x:Key="SetupCustom" TargetType="{x:Type Grid}" BasedOn="{StaticResource SettingGrid}">
+                <Setter Property="Margin" Value="40,20" />
+            </Style>
+
+            <Style x:Key="UpdateTitle" TargetType="{x:Type Label}">
+                <Setter Property="Margin" Value="10" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Foreground" Value="#333" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="UpdateProgress" TargetType="{x:Type ProgressBar}">
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="100" />
+                <Setter Property="Margin" Value="20,0,20,20" />
+                <Setter Property="Height" Value="25" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="Foreground" Value="#2ecc71" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ProgressBar}">
+                            <Border Name="PART_Track" CornerRadius="2" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding Foreground}" BorderThickness="1">
+                                <Grid>
+                                    <Border Name="PART_Indicator" CornerRadius="2,0,0,2" Background="{TemplateBinding Foreground}" BorderBrush="{TemplateBinding Background}" BorderThickness="0" Panel.ZIndex="0" HorizontalAlignment="Left" />
+                                    <Label Content="{TemplateBinding Value, Converter={StaticResource PercentConverter}}" Margin="0" Padding="0,0,0,1" FontSize="12" Foreground="#333333" Panel.ZIndex="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="ChangeLogContent" TargetType="{x:Type StackPanel}">
+                <Setter Property="Orientation" Value="Vertical" />
+                <Setter Property="Margin" Value="30,0" />
+            </Style>
+
+            <Style x:Key="ChangeLogTitle" TargetType="{x:Type Label}" BasedOn="{StaticResource UpdateTitle}">
+                <Setter Property="FontSize" Value="16" />
+            </Style>
+
+            <Style x:Key="ChangeLogBullet" TargetType="{x:Type TextBlock}">
+                <Setter Property="Margin" Value="0,0,8,4" />
+                <Setter Property="Foreground" Value="#333" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="Text" Value="•" />
+            </Style>
+
+            <Style x:Key="ChangeLogLine" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource ChangeLogBullet}">
+                <Setter Property="Margin" Value="0,0,0,4" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+
+            <Style x:Key="ChartContent" TargetType="{x:Type DockPanel}">
+                <Setter Property="LastChildFill" Value="True" />
+                <Setter Property="Margin" Value="15,5,15,15" />
+            </Style>
+
+            <Style x:Key="ChartExpander" TargetType="{x:Type Expander}">
+                <Setter Property="Padding" Value="0,5" />
+            </Style>
+
+            <Style x:Key="ChartLabel" TargetType="{x:Type Label}">
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="0,2,15,2" />
+                <Setter Property="MinWidth" Value="60" />
+            </Style>
+
+            <Style x:Key="ChartComboBox" TargetType="{x:Type ComboBox}">
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="ChartCheckComboBox" TargetType="{x:Type xctk:CheckComboBox}">
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Delimiter" Value=", " />
+            </Style>
+
+            <Style x:Key="ScrollBarTrackThumb" TargetType="{x:Type Thumb}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Thumb}">
+                            <Grid x:Name="Grid">
+                                <Rectangle HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Width="Auto" Height="Auto" Fill="Transparent" />
+                                <Border x:Name="CornerScrollBarRectangle" CornerRadius="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Width="Auto" Height="Auto" Margin="0,1" Background="{TemplateBinding Background}" Opacity="0.6" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="Tag" Value="Horizontal">
+                                    <Setter TargetName="CornerScrollBarRectangle" Property="Width" Value="Auto" />
+                                    <Setter TargetName="CornerScrollBarRectangle" Property="Height" Value="6" />
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="CornerScrollBarRectangle" Property="Opacity" Value="0.8" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="MinScrollBar" TargetType="{x:Type ScrollBar}">
+                <Setter Property="Stylus.IsFlicksEnabled" Value="false" />
+                <Setter Property="Foreground" Value="{Binding Source={x:Static frame:Settings.Instance}, Path=FontColor, Mode=OneWay}" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Width" Value="7" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ScrollBar}">
+                            <Grid x:Name="GridRoot" Width="7" Background="{TemplateBinding Background}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="0.00001*" />
+                                </Grid.RowDefinitions>
+                                <Track x:Name="PART_Track" Grid.Row="0" IsDirectionReversed="true" Focusable="false">
+                                    <Track.Thumb>
+                                        <Thumb x:Name="Thumb" Background="{TemplateBinding Foreground}" Style="{DynamicResource ScrollBarTrackThumb}" />
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton x:Name="PageUp" Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="false" />
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton x:Name="PageDown" Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="false" />
+                                    </Track.DecreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsEnabled" Value="false">
+                                    <Setter TargetName="Thumb" Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                                <Trigger Property="Orientation" Value="Horizontal">
+                                    <Setter TargetName="GridRoot" Property="LayoutTransform">
+                                        <Setter.Value>
+                                            <RotateTransform Angle="-90" />
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Setter TargetName="PART_Track" Property="LayoutTransform">
+                                        <Setter.Value>
+                                            <RotateTransform Angle="-90" />
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Setter Property="Width" Value="Auto" />
+                                    <Setter Property="Height" Value="8" />
+                                    <Setter TargetName="Thumb" Property="Tag" Value="Horizontal" />
+                                    <Setter TargetName="PageDown" Property="Command" Value="ScrollBar.PageLeftCommand" />
+                                    <Setter TargetName="PageUp" Property="Command" Value="ScrollBar.PageRightCommand" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="ContentView" TargetType="ScrollViewer">
+                <Setter Property="Margin" Value="5,15" />
+                <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+                <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+                    </Trigger>
+                </Style.Triggers>
+                <Style.Resources>
+                    <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource MinScrollBar}" />
+                </Style.Resources>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
